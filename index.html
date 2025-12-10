@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zack McGonigle - Cottonwood Insurance Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.1/client",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/"
+  }
+}
+</script>
+</head>
+  <body class="bg-gray-50 text-gray-900">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module" data-presets="typescript,react">
+      import React, { useState, useEffect, useRef } from 'react';
+      import ReactDOM from 'react-dom/client';
+      import { GoogleGenAI } from "@google/genai";
+      import { Phone, ShieldCheck, Wand2, Camera, Download, AlertCircle, Loader2, Search, Users, RefreshCw, Shield, Handshake, ScrollText, X } from 'lucide-react';
+
+      // --- GEMINI SERVICE ---
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+      const editImageWithGemini = async (base64Image, prompt) => {
+        try {
+          // 1. Prepare the image data. Ensure we strip the data URI prefix if present.
+          const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
+          // Determine mime type from the header if possible, default to png if raw
+          let mimeType = "image/png";
+          const match = base64Image.match(/^data:(image\/\w+);base64,/);
+          if (match) {
+            mimeType = match[1];
+          }
+
+          // 2. Call the API
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image', // aka nano banana
+            contents: {
+              parts: [
+                {
+                  inlineData: {
+                    data: base64Data,
+                    mimeType: mimeType,
+                  },
+                },
+                {
+                  text: `Edit this image: ${prompt}`,
+                },
+              ],
+            },
+          });
+
+          // 3. Extract the image from the response
+          for (const part of response.candidates?.[0]?.content?.parts || []) {
+            if (part.inlineData) {
+              const resultBase64 = part.inlineData.data;
+              // The API returns raw base64, usually PNG or JPEG. We assume PNG for display if not specified.
+              return `data:image/png;base64,${resultBase64}`;
+            }
+          }
+          
+          console.warn("No image data found in response");
+          return null;
+
+        } catch (error) {
+          console.error("Error editing image with Gemini:", error);
+          throw error;
+        }
+      };
+
+      // --- COMPONENTS ---
+
+      // Header Component
+      const Header = ({ onOpenAiTool }) => {
+        return (
+          <header className="sticky top-0 z-50 bg-white shadow-md">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between items-center h-20">
+                {/* Logo */}
+                <div className="flex items-center">
+                  <ShieldCheck className="h-8 w-8 text-blue-800 mr-3 flex-shrink-0" />
+                  <div className="flex flex-col">
+                    <span className="font-bold text-xl md:text-2xl text-gray-900 leading-none tracking-tight">Zack McGonigle</span>
+                    <span className="text-xs text-gray-500 font-semibold tracking-widest uppercase">Cottonwood Insurance Agent</span>
+                  </div>
+                </div>
+
+                {/* Right Side */}
+                <div className="flex items-center space-x-4 md:space-x-6">
+                  <button 
+                    onClick={onOpenAiTool}
+                    className="hidden lg:flex items-center text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+                  >
+                    <Wand2 className="w-4 h-4 mr-2" />
+                    AI Visualizer
+                  </button>
+                  
+                  <a href="tel:7144037130" className="hidden md:flex items-center text-gray-900 font-bold text-lg hover:text-blue-800 transition">
+                    <Phone className="w-5 h-5 mr-2 text-blue-700" />
+                    (714) 403-7130
+                  </a>
+                  
+                  <a 
+                    href="#quote-form"
+                    className="bg-red-700 hover:bg-red-800 text-white px-5 py-2.5 rounded-lg font-bold transition-colors shadow-md transform hover:-translate-y-0.5 whitespace-nowrap text-sm md:text-base"
+                  >
+                    Get Comparison Quote
+                  </a>
+                </div>
+              </div>
+            </div>
+          </header>
+        );
+      };
+
+      // Hero Component
+      const Hero = () => {
+        return (
+          <div className="relative bg-blue-900 overflow-hidden">
+            {/* Background Image with Overlay */}
+            <div className="absolute inset-0">
+              <img
+                className="w-full h-full object-cover"
+                src="https://picsum.photos/1920/1080?grayscale&blur=2"
+                alt="Family in front of home"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-900/95 to-blue-800/75 mix-blend-multiply" />
+            </div>
+
+            <div className="relative max-w-7xl mx-auto py-24 px-4 sm:py-32 sm:px-6 lg:px-8">
+              <div className="lg:w-2/3">
+                <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-6xl mb-6">
+                  Stop Letting One Insurance Company Dictate Your Price.
+                </h1>
+                <p className="mt-6 text-xl text-blue-100 max-w-3xl">
+                  We are Independent Agents. We shop over 25 top-rated carriers to find you the perfect blend of coverage and price—so you don’t have to.
+                </p>
+                <div className="mt-10 flex flex-col sm:flex-row gap-4">
+                  <a
+                    href="#quote-form"
+                    className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-bold rounded-lg text-blue-900 bg-white hover:bg-gray-50 md:py-4 md:text-xl shadow-xl transition-all"
+                  >
+                    Start My Free Rate Analysis
+                  </a>
+                  <div className="flex items-center text-blue-200 text-sm font-medium mt-2 sm:mt-0 px-4">
+                    <span>No cost. No obligation. 100% Local Service.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // TrustBar Component
+      const TrustBar = () => {
+        const carriers = [
+          "Travelers", "Safeco", "Progressive", "Liberty Mutual", "Nationwide", "The Hartford"
+        ];
+
+        return (
+          <div className="bg-gray-100 py-8 border-b border-gray-200">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <p className="text-center text-sm font-semibold uppercase text-gray-500 tracking-wide mb-6">
+                We compare rates from the nation's most trusted carriers
+              </p>
+              <div className="flex flex-wrap justify-center gap-8 md:gap-16 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
+                {carriers.map((carrier) => (
+                  <span key={carrier} className="text-xl md:text-2xl font-bold text-gray-700 font-serif italic">
+                    {carrier}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // ImageEditor Component
+      const ImageEditor = () => {
+        const [selectedImage, setSelectedImage] = useState(null);
+        const [generatedImage, setGeneratedImage] = useState(null);
+        const [prompt, setPrompt] = useState("");
+        const [isLoading, setIsLoading] = useState(false);
+        const [error, setError] = useState(null);
+        const fileInputRef = useRef(null);
+
+        const handleFileChange = (event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              setSelectedImage(reader.result);
+              setGeneratedImage(null);
+              setError(null);
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+
+        const handleGenerate = async () => {
+          if (!selectedImage || !prompt) return;
+
+          setIsLoading(true);
+          setError(null);
+
+          try {
+            const result = await editImageWithGemini(selectedImage, prompt);
+            if (result) {
+              setGeneratedImage(result);
+            } else {
+              setError("The AI could not generate an image. Please try a different prompt.");
+            }
+          } catch (err) {
+            setError("An error occurred while connecting to the AI service.");
+          } finally {
+            setIsLoading(false);
+          }
+        };
+
+        return (
+          <section className="py-16 bg-white border-y border-gray-200" id="ai-tool">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="text-center mb-10">
+                <div className="inline-flex items-center justify-center p-2 bg-blue-50 rounded-full mb-4">
+                  <Wand2 className="h-6 w-6 text-blue-600 mr-2" />
+                  <span className="text-blue-800 font-semibold text-sm uppercase tracking-wide">New Feature</span>
+                </div>
+                <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
+                  AI Property Visualizer
+                </h2>
+                <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
+                  Upload a photo of your home or property and use our AI to visualize renovations, repairs, or aesthetic changes before you commit.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                {/* Input Section */}
+                <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 shadow-sm">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Camera className="w-5 h-5 mr-2 text-gray-500" />
+                    1. Upload Photo
+                  </h3>
+                  
+                  <div 
+                    className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-500 transition-colors cursor-pointer bg-white"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {selectedImage ? (
+                      <div className="relative aspect-video w-full overflow-hidden rounded-lg">
+                        <img src={selectedImage} alt="Original" className="object-cover w-full h-full" />
+                        <button 
+                          className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded hover:bg-black"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fileInputRef.current?.click();
+                          }}
+                        >
+                          Change
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-8">
+                        <Camera className="w-12 h-12 text-gray-400 mb-3" />
+                        <p className="text-gray-600 font-medium">Click to upload photo</p>
+                        <p className="text-gray-400 text-sm mt-1">PNG, JPG up to 5MB</p>
+                      </div>
+                    )}
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={handleFileChange}
+                    />
+                  </div>
+
+                  <div className="mt-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">2. Describe Changes</h3>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        placeholder="E.g., 'Add a retro filter', 'Fix the roof shingles', 'Add a garden'"
+                        className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                        disabled={isLoading}
+                      />
+                      <button
+                        onClick={handleGenerate}
+                        disabled={!selectedImage || !prompt || isLoading}
+                        className={`px-6 py-3 rounded-lg font-semibold text-white flex items-center transition-all ${
+                          !selectedImage || !prompt || isLoading
+                            ? 'bg-gray-300 cursor-not-allowed'
+                            : 'bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl'
+                        }`}
+                      >
+                        {isLoading ? <Loader2 className="animate-spin w-5 h-5" /> : <Wand2 className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Powered by Gemini 2.5 Flash Image. Describe what you want to see.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Output Section */}
+                <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 shadow-sm h-full min-h-[400px] flex flex-col">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Wand2 className="w-5 h-5 mr-2 text-blue-500" />
+                    3. AI Result
+                  </h3>
+
+                  <div className="flex-1 flex items-center justify-center bg-white rounded-xl border border-gray-200 overflow-hidden relative">
+                    {isLoading ? (
+                      <div className="text-center">
+                        <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto mb-3" />
+                        <p className="text-gray-600 font-medium">Analyzing property...</p>
+                        <p className="text-gray-400 text-sm">Applying visual updates</p>
+                      </div>
+                    ) : generatedImage ? (
+                      <div className="relative w-full h-full">
+                        <img src={generatedImage} alt="Generated" className="w-full h-auto object-contain max-h-[500px]" />
+                        <a 
+                          href={generatedImage} 
+                          download="zack-mcgonigle-insurance-ai-edit.png"
+                          className="absolute top-2 right-2 bg-white/90 p-2 rounded-full shadow hover:bg-white text-gray-700 transition"
+                          title="Download Image"
+                        >
+                          <Download className="w-5 h-5" />
+                        </a>
+                      </div>
+                    ) : error ? (
+                      <div className="text-center text-red-500 px-6">
+                        <AlertCircle className="w-10 h-10 mx-auto mb-3" />
+                        <p>{error}</p>
+                      </div>
+                    ) : (
+                      <div className="text-center text-gray-400">
+                        <p>Result will appear here</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        );
+      };
+
+      // Features Component
+      const Features = () => {
+        return (
+          <div className="py-16 bg-white">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              
+              {/* Independent Advantage */}
+              <div className="mb-24">
+                <div className="lg:grid lg:grid-cols-2 lg:gap-16 items-center">
+                  <div>
+                    <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl mb-6">
+                      Why Choose an Independent Agent?
+                    </h2>
+                    <p className="text-lg text-gray-600 mb-8">
+                      Most people don't realize there are two ways to buy insurance:
+                    </p>
+                    
+                    <div className="space-y-6">
+                      <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-500">
+                        <h3 className="font-bold text-red-900">The "Captive" Way</h3>
+                        <p className="text-red-800 text-sm mt-1">
+                          You call a big brand (like the ones with the lizards or stadiums). The agent can only sell you that one company's product. If their rates go up? You’re stuck.
+                        </p>
+                      </div>
+
+                      <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-500 shadow-sm">
+                        <h3 className="font-bold text-green-900">The "Independent" Way (Us)</h3>
+                        <p className="text-green-800 text-sm mt-1">
+                          We work for YOU, not the insurance company. We have access to the entire marketplace.
+                        </p>
+                      </div>
+                    </div>
+
+                    <ul className="mt-8 space-y-4">
+                      <li className="flex">
+                        <div className="flex-shrink-0">
+                          <div className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-100 text-blue-600">
+                            <Search className="h-5 w-5" />
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <h4 className="text-lg font-bold text-gray-900">We Are Your Personal Shopper</h4>
+                          <p className="text-gray-500">We compare dozens of quotes at once.</p>
+                        </div>
+                      </li>
+                      <li className="flex">
+                        <div className="flex-shrink-0">
+                          <div className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-100 text-blue-600">
+                            <Users className="h-5 w-5" />
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <h4 className="text-lg font-bold text-gray-900">We Are Your Advocate</h4>
+                          <p className="text-gray-500">If you have a claim, we are on your side of the table, fighting for a fair payout.</p>
+                        </div>
+                      </li>
+                      <li className="flex">
+                        <div className="flex-shrink-0">
+                          <div className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-100 text-blue-600">
+                            <RefreshCw className="h-5 w-5" />
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <h4 className="text-lg font-bold text-gray-900">We Are Lifetime Partners</h4>
+                          <p className="text-gray-500">At every renewal, we re-check the market. If your rate creeps up, we can switch carriers without you losing your agent.</p>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="mt-10 lg:mt-0 relative">
+                    <div className="relative rounded-2xl overflow-hidden shadow-2xl h-full min-h-[400px] flex items-center justify-center">
+                       <img 
+                        src="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&q=80&w=1000" 
+                        alt="Modern home background" 
+                        className="absolute inset-0 w-full h-full object-cover grayscale"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-900/95 to-blue-800/75 mix-blend-multiply"></div>
+                      
+                      {/* Visual Watermark/Anchor */}
+                      <div className="relative z-10 flex flex-col items-center justify-center p-8 text-center">
+                        <Shield className="h-24 w-24 text-blue-200 opacity-30 mb-4" />
+                        <p className="text-blue-100 font-serif italic text-2xl opacity-90">"Protecting what matters most."</p>
+                      </div>
+                    </div>
+                    {/* Decorative accent */}
+                    <div className="absolute -z-10 top-4 -right-4 w-full h-full bg-blue-50 rounded-2xl border border-blue-100"></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rate Defense Strategy */}
+              <div className="text-center max-w-3xl mx-auto mb-16">
+                <h2 className="text-3xl font-extrabold text-gray-900">The "Rate Defense" Strategy</h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="bg-gray-50 rounded-xl p-8 text-center hover:shadow-lg transition-shadow duration-300">
+                  <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 text-blue-600 mb-6">
+                    <ScrollText className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">The Audit</h3>
+                  <p className="text-gray-600">
+                    Most homeowners are underinsured due to rising costs. We audit your policy to ensure you aren't paying for 'fluff' or missing protection.
+                  </p>
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-8 text-center hover:shadow-lg transition-shadow duration-300">
+                   <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 text-blue-600 mb-6">
+                    <Handshake className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">The Match</h3>
+                  <p className="text-gray-600">
+                    We match your specific risk profile (credit, driving history, home age) with the carrier that has the biggest appetite for you.
+                  </p>
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-8 text-center hover:shadow-lg transition-shadow duration-300">
+                   <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 text-blue-600 mb-6">
+                    <Shield className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">The Bundle</h3>
+                  <p className="text-gray-600">
+                    We maximize multi-policy discounts by bundling Home, Auto, Toys, and Umbrella policies under one roof, often saving clients 15-20%.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      };
+
+      // QuoteForm Component
+      const QuoteForm = () => {
+        useEffect(() => {
+          const script = document.createElement('script');
+          script.src = "https://link.agent-crm.com/js/form_embed.js";
+          script.async = true;
+          document.body.appendChild(script);
+
+          return () => {
+            if (document.body.contains(script)) {
+              document.body.removeChild(script);
+            }
+          };
+        }, []);
+
+        return (
+          <div id="quote-form" className="bg-blue-900 py-16">
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200">
+                <div className="bg-gradient-to-r from-gray-900 to-blue-900 p-10 text-center border-b-8 border-red-600">
+                   <h2 className="text-4xl font-extrabold text-white mb-4">Request Your Comparison Quote</h2>
+                   <p className="text-blue-100 text-lg max-w-2xl mx-auto">Stop overpaying. Fill out the form below and let us shop 25+ top carriers for you.</p>
+                   
+                   <div className="mt-8 flex flex-col md:flex-row items-center justify-center gap-3 bg-white/10 rounded-full py-3 px-6 backdrop-blur-sm border border-white/10 inline-flex mx-auto">
+                     <span className="text-blue-100 font-medium">Want to speak with an agent sooner?</span>
+                     <a href="tel:7144037130" className="flex items-center text-white font-bold hover:text-blue-200 transition-colors">
+                       <Phone className="w-4 h-4 mr-2" />
+                       Call (714) 403-7130
+                     </a>
+                   </div>
+                </div>
+                
+                <div className="p-4 md:p-8 bg-white">
+                  <iframe
+                      src="https://link.agent-crm.com/widget/form/dKEzNixguAA4kkdG4jgl"
+                      style={{ width: '100%', height: '100%', minHeight: '800px', border: 'none', borderRadius: '3px' }}
+                      id="inline-dKEzNixguAA4kkdG4jgl" 
+                      data-layout="{'id':'INLINE'}"
+                      data-trigger-type="alwaysShow"
+                      data-trigger-value=""
+                      data-activation-type="alwaysActivated"
+                      data-activation-value=""
+                      data-deactivation-type="neverDeactivate"
+                      data-deactivation-value=""
+                      data-form-name="Form 17"
+                      data-height="1348"
+                      data-layout-iframe-id="inline-dKEzNixguAA4kkdG4jgl"
+                      data-form-id="dKEzNixguAA4kkdG4jgl"
+                      title="Form 17"
+                  >
+                  </iframe>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // Footer Component
+      const Footer = ({ onOpenAiTool }) => {
+        return (
+          <footer className="bg-gray-900 text-gray-300 py-12">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              
+              {/* FAQ Section */}
+              <div className="mb-12 border-b border-gray-800 pb-12">
+                 <h3 className="text-2xl font-bold text-white mb-8 text-center">Frequently Asked Questions</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                   <div>
+                     <h4 className="font-bold text-white mb-2">Q: Does it cost extra to use an Independent Agent?</h4>
+                     <p className="text-sm">A: Absolutely not. We are paid a commission by the insurance carrier you choose. Your rate is exactly the same (often lower due to our expertise) as if you went direct.</p>
+                   </div>
+                   <div>
+                     <h4 className="font-bold text-white mb-2">Q: Will you spam me with calls?</h4>
+                     <p className="text-sm">A: No. We hate spam too. We will reach out to gather any missing details and present your quote options. We treat you the way we want to be treated.</p>
+                   </div>
+                    <div>
+                     <h4 className="font-bold text-white mb-2">Q: How long does a quote take?</h4>
+                     <p className="text-sm">A: Because we shop multiple carriers to find the absolute best fit, please allow us 24 hours to build your comprehensive proposal.</p>
+                   </div>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-sm">
+                <div>
+                  <h4 className="text-white font-bold text-lg mb-4">Zack McGonigle<br/>Cottonwood Insurance Agent</h4>
+                  <p>2028 E Fort Union Blvd, Unit 100</p>
+                  <p>Cottonwood Heights, UT 84121</p>
+                  <p className="mt-2"><a href="tel:7144037130" className="hover:text-white">(714) 403-7130</a></p>
+                </div>
+                <div>
+                  <h4 className="text-white font-bold text-lg mb-4">Legal</h4>
+                  <ul className="space-y-2">
+                    <li><a href="#" className="hover:text-white transition">Privacy Policy</a></li>
+                    <li><a href="#" className="hover:text-white transition">Terms of Service</a></li>
+                    <li><a href="#" className="hover:text-white transition">Accessibility</a></li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="text-white font-bold text-lg mb-4">Services</h4>
+                  <ul className="space-y-2">
+                    <li><a href="#quote-form" className="hover:text-white transition">Get a Quote</a></li>
+                    <li><a href="#" className="hover:text-white transition">Client Portal</a></li>
+                    <li>
+                      <button onClick={onOpenAiTool} className="hover:text-white transition flex items-center">
+                        <Wand2 className="w-3 h-3 mr-2" /> AI Property Visualizer
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div className="mt-8 text-center text-xs text-gray-600 border-t border-gray-800 pt-8">
+                <p>We are an independent insurance agency licensed in UT. We do not work for any specific insurance carrier; we work for our clients. Coverages subject to underwriting approval.</p>
+                <p className="mt-2">&copy; {new Date().getFullYear()} Zack McGonigle - Cottonwood Insurance Agent. All rights reserved.</p>
+              </div>
+            </div>
+          </footer>
+        );
+      };
+
+      // App Component
+      const App = () => {
+        const [isAiToolOpen, setIsAiToolOpen] = useState(false);
+
+        return (
+          <div className="min-h-screen flex flex-col font-sans">
+            <Header onOpenAiTool={() => setIsAiToolOpen(true)} />
+            
+            {/* AI Tool Modal */}
+            {isAiToolOpen && (
+              <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                  {/* Background overlay */}
+                  <div 
+                    className="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity" 
+                    aria-hidden="true"
+                    onClick={() => setIsAiToolOpen(false)}
+                  ></div>
+
+                  {/* Modal panel */}
+                  <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                  <div className="relative inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full">
+                    <div className="absolute top-0 right-0 pt-4 pr-4 z-10">
+                      <button
+                        type="button"
+                        className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        onClick={() => setIsAiToolOpen(false)}
+                      >
+                        <span className="sr-only">Close</span>
+                        <X className="h-6 w-6" />
+                      </button>
+                    </div>
+                    <div className="bg-white">
+                      <ImageEditor />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <main className="flex-grow">
+              <Hero />
+              <TrustBar />
+              
+              {/* Main Content Flow */}
+              <Features />
+              
+              {/* Testimonial Snippet */}
+              <section className="bg-blue-50 py-12">
+                <div className="max-w-4xl mx-auto px-4 text-center">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-6">Proven Results for Local Families</h2>
+                  <div className="grid md:grid-cols-2 gap-8">
+                    <div className="bg-white p-6 rounded-xl shadow-sm">
+                       <p className="italic text-gray-600 mb-4">"I thought I had a great rate until Zack McGonigle looked at my policy. Not only did I save $600 a year, but I found out my old policy wouldn't have covered my roof."</p>
+                       <p className="font-bold text-gray-900">— Sarah J., Lehi, UT</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-sm">
+                       <p className="italic text-gray-600 mb-4">"Finally, an agent who actually answers the phone. I love that I can text them questions and get real answers, not a call center robot."</p>
+                       <p className="font-bold text-gray-900">— Mike T., Salt Lake City</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <QuoteForm />
+            </main>
+            <Footer onOpenAiTool={() => setIsAiToolOpen(true)} />
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(
+          <App />
+      );
+    </script>
+  </body>
+</html>
